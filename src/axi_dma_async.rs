@@ -7,7 +7,7 @@ use std::fmt;
 use std::ptr;
 use async_io::Async;
 
-use crate::DmaBuff;
+use crate::DmaBuffer;
 
 const MM2S_DMACR:  isize = 0x0  / 4;
 const MM2S_DMASR:  isize = 0x4  / 4;
@@ -63,7 +63,7 @@ impl AxiDmaAsync {
         })
     }
 
-    pub async fn start_h2d(&mut self, buff: &DmaBuff, bytes: usize) -> Result<()> {
+    pub async fn start_h2d(&mut self, buff: &DmaBuffer, bytes: usize) -> Result<()> {
         debug_assert!(buff.size() >= bytes);
         unsafe {
             // reset controller
@@ -84,7 +84,7 @@ impl AxiDmaAsync {
         Ok(())
     }
 
-    pub async fn start_d2h(&mut self, buff: &DmaBuff, bytes: usize) -> Result<()> {
+    pub async fn start_d2h(&mut self, buff: &DmaBuffer, bytes: usize) -> Result<()> {
         debug_assert!(buff.size() >= bytes);
         unsafe {
             // reset controller

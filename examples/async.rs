@@ -1,11 +1,11 @@
 use anyhow::Result;
-use xilinx_dma::DmaBuff;
+use xilinx_dma::DmaBuffer;
 use xilinx_dma::AxiDmaAsync;
 
 fn main() -> Result<()> {
 
-    let dma_buffer_h2d = DmaBuff::new("udmabuf0")?;
-    let dma_buffer_d2h = DmaBuff::new("udmabuf1")?;
+    let dma_buffer_h2d = DmaBuffer::new("udmabuf0")?;
+    let dma_buffer_d2h = DmaBuffer::new("udmabuf1")?;
     println!("{:?}", dma_buffer_h2d);
     println!("{:?}", dma_buffer_d2h);
 

@@ -7,7 +7,7 @@ use std::os::unix::io::AsRawFd;
 use std::mem;
 use std::slice;
 
-pub struct DmaBuff {
+pub struct DmaBuffer {
     name: String,
     size: usize,
     phys_addr: usize,
@@ -16,9 +16,9 @@ pub struct DmaBuff {
     debug_vma: bool,
 }
 
-impl fmt::Debug for DmaBuff {
+impl fmt::Debug for DmaBuffer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "DmaBuff ({})", &self.name)?;
+        writeln!(f, "DmaBuffer ({})", &self.name)?;
         writeln!(f, "  size: {:#x?}", &self.size)?;
         writeln!(f, "  phys_addr: {:#x?}", &self.phys_addr)?;
         writeln!(f, "  buffer: {:?}", &self.buffer)?;
@@ -27,8 +27,8 @@ impl fmt::Debug for DmaBuff {
     }
 }
 
-impl DmaBuff {
-    pub fn new(name: &str) -> Result<DmaBuff> {
+impl DmaBuffer {
+    pub fn new(name: &str) -> Result<DmaBuffer> {
 
         let phy_f = format!("/sys/class/u-dma-buf/{}/phys_addr", name);
         let mut phy_f = File::open(phy_f)?;
@@ -75,7 +75,7 @@ impl DmaBuff {
             }
         }
 
-        Ok(DmaBuff {
+        Ok(DmaBuffer {
             name: name.to_string(),
             size,
             phys_addr,
@@ -116,7 +116,7 @@ impl DmaBuff {
     }
 }
 
-impl Drop for DmaBuff {
+impl Drop for DmaBuffer {
     fn drop(&mut self) {
         unsafe {
             libc::munmap(self.buffer, self.size);

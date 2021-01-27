@@ -6,7 +6,7 @@ use std::os::unix::io::AsRawFd;
 use std::fmt;
 use std::ptr;
 
-use crate::DmaBuff;
+use crate::DmaBuffer;
 
 const MM2S_DMACR:  isize = 0x0  / 4;
 const MM2S_DMASR:  isize = 0x4  / 4;
@@ -62,7 +62,7 @@ impl AxiDma {
         })
     }
 
-    pub fn start_h2d(&mut self, buff: &DmaBuff, bytes: usize) -> Result<()> {
+    pub fn start_h2d(&mut self, buff: &DmaBuffer, bytes: usize) -> Result<()> {
         debug_assert!(buff.size() >= bytes);
         unsafe {
             // reset controller
@@ -83,7 +83,7 @@ impl AxiDma {
         Ok(())
     }
 
-    pub fn start_d2h(&mut self, buff: &DmaBuff, bytes: usize) -> Result<()> {
+    pub fn start_d2h(&mut self, buff: &DmaBuffer, bytes: usize) -> Result<()> {
         debug_assert!(buff.size() >= bytes);
         unsafe {
             // reset controller
