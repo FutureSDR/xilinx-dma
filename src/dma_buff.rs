@@ -4,6 +4,8 @@ use std::fmt;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::os::unix::io::AsRawFd;
+use std::mem;
+use std::slice;
 
 pub struct DmaBuff {
     name: String,
@@ -16,31 +18,33 @@ pub struct DmaBuff {
 
 impl fmt::Debug for DmaBuff {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("DmaBuff")
-         .field("name", &self.name)
-         .field("size", &self.size)
-         .finish()
+        writeln!(f, "DmaBuff ({})", &self.name)?;
+        writeln!(f, "  size: {:#x?}", &self.size)?;
+        writeln!(f, "  phys_addr: {:#x?}", &self.phys_addr)?;
+        writeln!(f, "  buffer: {:?}", &self.buffer)?;
+        writeln!(f, "  sync_mode: {:?}", &self.sync_mode)?;
+        write!(f, "  debug_vma: {:?}", &self.debug_vma)
     }
 }
 
 impl DmaBuff {
     pub fn new(name: &str) -> Result<DmaBuff> {
 
-        let phy_f = format!("/sys/class/u-dma-buff/{}/phys_addr", name);
+        let phy_f = format!("/sys/class/u-dma-buf/{}/phys_addr", name);
         let mut phy_f = File::open(phy_f)?;
         let mut buff = String::new();
         phy_f.read_to_string(&mut buff)?;
         let buff = buff.trim().trim_start_matches("0x");
         let phys_addr = usize::from_str_radix(buff, 16)?;
 
-        let size_f = format!("/sys/class/u-dma-buff/{}/size", name);
+        let size_f = format!("/sys/class/u-dma-buf/{}/size", name);
         let mut size_f = File::open(size_f)?;
         let mut buff = String::new();
         size_f.read_to_string(&mut buff)?;
         let buff = buff.trim();
         let size = buff.parse::<usize>()?;
 
-        let debug_f = format!("/sys/class/u-dma-buff/{}/debug_vma", name);
+        let debug_f = format!("/sys/class/u-dma-buf/{}/debug_vma", name);
         let mut debug_f = File::open(debug_f)?;
         let mut buff = String::new();
         debug_f.read_to_string(&mut buff)?;
@@ -50,7 +54,7 @@ impl DmaBuff {
             true
         };
 
-        let sync_f = format!("/sys/class/u-dma-buff/{}/sync_mode", name);
+        let sync_f = format!("/sys/class/u-dma-buf/{}/sync_mode", name);
         let mut sync_f = File::open(sync_f)?;
         let mut buff = String::new();
         sync_f.read_to_string(&mut buff)?;
@@ -67,7 +71,7 @@ impl DmaBuff {
         unsafe {
             buffer = libc::mmap(0 as *mut libc::c_void, size, libc::PROT_READ|libc::PROT_WRITE, libc::MAP_SHARED, dev.as_raw_fd(), 0);
             if buffer == libc::MAP_FAILED {
-                panic!("mapping dma bufffer into virtual memory failed");
+                panic!("mapping dma buffer into virtual memory failed");
             }
         }
 
@@ -79,6 +83,12 @@ impl DmaBuff {
             sync_mode,
             debug_vma,
         })
+    }
+
+    pub fn slice<T>(&self) -> &[T] {
+        unsafe {
+            slice::from_raw_parts_mut(self.buffer as *mut T, self.size / mem::size_of::<T>())
+        }
     }
 
     pub fn name(&self) -> &str {
@@ -103,6 +113,14 @@ impl DmaBuff {
 
     pub fn debug_vma(&self) -> bool {
         self.debug_vma
+    }
+}
+
+impl Drop for DmaBuff {
+    fn drop(&mut self) {
+        unsafe {
+            libc::munmap(self.buffer, self.size);
+        }
     }
 }
 
