@@ -21,5 +21,8 @@ fn main() -> Result<()> {
     dma_d2h.start_d2h(&dma_buffer, dma_buffer.size())?;
     std::thread::sleep(std::time::Duration::from_secs_f64(0.1));
 
+    dma_h2d.status_h2d();
+    dma_d2h.status_d2h();
+
     Ok(())
 }

@@ -66,17 +66,14 @@ impl AxiDmaAsync {
     pub async fn start_h2d(&mut self, buff: &DmaBuffer, bytes: usize) -> Result<()> {
         debug_assert!(buff.size() >= bytes);
         unsafe {
-            // reset controller
-            ptr::write_volatile(self.base.offset(MM2S_DMACR), 0x0004);
-
             // clear irqs in dma
-            ptr::write_volatile(self.base.offset(MM2S_DMASR), 0x1000);
+            ptr::write_volatile(self.base.offset(MM2S_DMASR), 0x7000);
 
             // enable irqs for uio driver
             self.dev_fd.write_with_mut(|s| s.write(&[1u8, 0, 0, 0])).await?;
 
             // Configure AXIDMA - MM2S (PS -> PL)
-            ptr::write_volatile(self.base.offset(MM2S_DMACR), 0x1001);
+            ptr::write_volatile(self.base.offset(MM2S_DMACR), 0x7001);
             ptr::write_volatile(self.base.offset(MM2S_SA), (buff.phys_addr() & 0xffff_ffff) as u32);
             ptr::write_volatile(self.base.offset(MM2S_SA_MSB), (buff.phys_addr() >> 32) as u32);
             ptr::write_volatile(self.base.offset(MM2S_LENGTH), bytes as u32);
@@ -87,22 +84,188 @@ impl AxiDmaAsync {
     pub async fn start_d2h(&mut self, buff: &DmaBuffer, bytes: usize) -> Result<()> {
         debug_assert!(buff.size() >= bytes);
         unsafe {
-            // reset controller
-            ptr::write_volatile(self.base.offset(S2MM_DMACR), 0x0004);
-
             // clear irqs in dma
-            ptr::write_volatile(self.base.offset(S2MM_DMASR), 0x1000);
+            ptr::write_volatile(self.base.offset(S2MM_DMASR), 0x7000);
 
             // enable irqs for uio driver
             self.dev_fd.write_with_mut(|s| s.write(&[1u8, 0, 0, 0])).await?;
 
             // Configure AXIDMA - S2MM (PL -> PS)
-            ptr::write_volatile(self.base.offset(S2MM_DMACR), 0x1001);
+            ptr::write_volatile(self.base.offset(S2MM_DMACR), 0x7001);
             ptr::write_volatile(self.base.offset(S2MM_DA), (buff.phys_addr() & 0xffff_ffff) as u32);
             ptr::write_volatile(self.base.offset(S2MM_DA_MSB), (buff.phys_addr() >> 32) as u32);
             ptr::write_volatile(self.base.offset(S2MM_LENGTH), bytes as u32);
         }
         Ok(())
+    }
+
+    pub fn reset(&mut self) {
+        unsafe {
+            // reset controller
+            ptr::write_volatile(self.base.offset(MM2S_DMACR), 0x0004);
+            loop {
+                if ptr::read_volatile(self.base.offset(MM2S_DMACR)) & 0x0004 == 0 {
+                    break;
+                }
+            }
+            // reset controller
+            ptr::write_volatile(self.base.offset(S2MM_DMACR), 0x0004);
+            loop {
+                if ptr::read_volatile(self.base.offset(S2MM_DMACR)) & 0x0004 == 0 {
+                    break;
+                }
+            }
+
+            // clear irqs
+            ptr::write_volatile(self.base.offset(S2MM_DMASR), 0x7000);
+            ptr::write_volatile(self.base.offset(MM2S_DMASR), 0x7000);
+        }
+    }
+
+    pub fn status_h2d(&self) {
+        let mut c;
+        unsafe {
+            c = ptr::read_volatile(self.base.offset(MM2S_DMACR));
+        }
+        print!("h2d control: ");
+        if c & 1 != 0 {
+            print!("running, ");
+        } else {
+            print!("stopped, ");
+        }
+        if c & 4 != 0 {
+            print!("resetting, ");
+        }
+        if c & 1<<12 != 0 {
+            print!("ioc_irq_en, ");
+        }
+        if c & 1<<13 != 0 {
+            print!("dly_irq_en, ");
+        }
+        if c & 1<<14 != 0 {
+            print!("err_irq_en, ");
+        }
+        println!("");
+        unsafe {
+            c = ptr::read_volatile(self.base.offset(MM2S_DMASR));
+        }
+        print!("h2d status: ");
+        if c & 1 != 0 {
+            print!("halted, ");
+        } else {
+            print!("stopped, ");
+        }
+        if c & 2 != 0 {
+            print!("idle, ");
+        } else {
+            print!("busy, ");
+        }
+        if c & 8 != 0 {
+            print!("scatter gather, ");
+        } else {
+            print!("register mode, ");
+        }
+        if c & 1<<4 != 0 {
+            print!("internal error, ");
+        }
+        if c & 1<<5 != 0 {
+            print!("slave error, ");
+        }
+        if c & 1<<6 != 0 {
+            print!("decode error, ");
+        }
+        if c & 1<<8 != 0 {
+            print!("sg internal error, ");
+        }
+        if c & 1<<9 != 0 {
+            print!("sg slave error, ");
+        }
+        if c & 1<<10 != 0 {
+            print!("sg dec error, ");
+        }
+        if c & 1<<12 != 0 {
+            print!("ioc_irq, ");
+        }
+        if c & 1<<13 != 0 {
+            print!("dly_irq, ");
+        }
+        if c & 1<<14 != 0 {
+            print!("err_irq, ");
+        }
+        println!("");
+    }
+
+    pub fn status_d2h(&self) {
+        let mut c;
+        unsafe {
+            c = ptr::read_volatile(self.base.offset(S2MM_DMACR));
+        }
+        print!("d2h control: ");
+        if c & 1 != 0 {
+            print!("running, ");
+        } else {
+            print!("stopped, ");
+        }
+        if c & 4 != 0 {
+            print!("resetting, ");
+        }
+        if c & 1<<12 != 0 {
+            print!("ioc_irq_en, ");
+        }
+        if c & 1<<13 != 0 {
+            print!("dly_irq_en, ");
+        }
+        if c & 1<<14 != 0 {
+            print!("err_irq_en, ");
+        }
+        println!("");
+        unsafe {
+            c = ptr::read_volatile(self.base.offset(S2MM_DMASR));
+        }
+        print!("d2h status: ");
+        if c & 1 != 0 {
+            print!("halted, ");
+        } else {
+            print!("stopped, ");
+        }
+        if c & 2 != 0 {
+            print!("idle, ");
+        } else {
+            print!("busy, ");
+        }
+        if c & 8 != 0 {
+            print!("scatter gather, ");
+        } else {
+            print!("register mode, ");
+        }
+        if c & 1<<4 != 0 {
+            print!("internal error, ");
+        }
+        if c & 1<<5 != 0 {
+            print!("slave error, ");
+        }
+        if c & 1<<6 != 0 {
+            print!("decode error, ");
+        }
+        if c & 1<<8 != 0 {
+            print!("sg internal error, ");
+        }
+        if c & 1<<9 != 0 {
+            print!("sg slave error, ");
+        }
+        if c & 1<<10 != 0 {
+            print!("sg dec error, ");
+        }
+        if c & 1<<12 != 0 {
+            print!("ioc_irq, ");
+        }
+        if c & 1<<13 != 0 {
+            print!("dly_irq, ");
+        }
+        if c & 1<<14 != 0 {
+            print!("err_irq, ");
+        }
+        println!("");
     }
 
     pub async fn wait_d2h(&mut self) -> Result<()> {

@@ -39,6 +39,9 @@ fn main() -> Result<()> {
     dma_d2h.wait_d2h()?;
     println!("d2h done");
 
+    dma_h2d.status_h2d();
+    dma_d2h.status_d2h();
+
     for i in 0..items {
         assert_eq!(slice_d2h[i], slice_h2d[i] + 123);
     }
