@@ -71,7 +71,7 @@ impl DmaBuff {
         unsafe {
             buffer = libc::mmap(0 as *mut libc::c_void, size, libc::PROT_READ|libc::PROT_WRITE, libc::MAP_SHARED, dev.as_raw_fd(), 0);
             if buffer == libc::MAP_FAILED {
-                panic!("mapping dma buffer into virtual memory failed");
+                anyhow::bail!("mapping dma buffer into virtual memory failed");
             }
         }
 
