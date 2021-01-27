@@ -65,11 +65,8 @@ impl AxiDma {
     pub fn start_h2d(&mut self, buff: &DmaBuffer, bytes: usize) -> Result<()> {
         debug_assert!(buff.size() >= bytes);
         unsafe {
-            // reset controller
-            ptr::write_volatile(self.base.offset(MM2S_DMACR), 0x0004);
-
             // clear irqs in dma
-            ptr::write_volatile(self.base.offset(MM2S_DMASR), 0x1000);
+            ptr::write_volatile(self.base.offset(MM2S_DMASR), 0x7000);
 
             // enable irqs for uio driver
             self.dev_fd.write(&[1u8, 0, 0, 0])?;
@@ -86,11 +83,8 @@ impl AxiDma {
     pub fn start_d2h(&mut self, buff: &DmaBuffer, bytes: usize) -> Result<()> {
         debug_assert!(buff.size() >= bytes);
         unsafe {
-            // reset controller
-            ptr::write_volatile(self.base.offset(S2MM_DMACR), 0x0004);
-
             // clear irqs in dma
-            ptr::write_volatile(self.base.offset(S2MM_DMASR), 0x1000);
+            ptr::write_volatile(self.base.offset(S2MM_DMASR), 0x7000);
 
             // enable irqs for uio driver
             self.dev_fd.write(&[1u8, 0, 0, 0])?;
@@ -102,6 +96,29 @@ impl AxiDma {
             ptr::write_volatile(self.base.offset(S2MM_LENGTH), bytes as u32);
         }
         Ok(())
+    }
+
+    pub fn reset(&mut self) {
+        unsafe {
+            // reset controller
+            ptr::write_volatile(self.base.offset(MM2S_DMACR), 0x0004);
+            loop {
+                if ptr::read_volatile(self.base.offset(MM2S_DMACR)) & 0x0004 == 0 {
+                    break;
+                }
+            }
+            // reset controller
+            ptr::write_volatile(self.base.offset(S2MM_DMACR), 0x0004);
+            loop {
+                if ptr::read_volatile(self.base.offset(S2MM_DMACR)) & 0x0004 == 0 {
+                    break;
+                }
+            }
+
+            // clear irqs
+            ptr::write_volatile(self.base.offset(S2MM_DMASR), 0x7000);
+            ptr::write_volatile(self.base.offset(MM2S_DMASR), 0x7000);
+        }
     }
 
     pub fn wait_d2h(&mut self) -> Result<()> {

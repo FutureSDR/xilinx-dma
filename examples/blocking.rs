@@ -1,16 +1,16 @@
 use anyhow::Result;
-use xilinx_dma::DmaBuff;
+use xilinx_dma::DmaBuffer;
 use xilinx_dma::AxiDma;
 
 fn main() -> Result<()> {
 
-    let dma_buffer_h2d = DmaBuff::new("udmabuf0")?;
-    let dma_buffer_d2h = DmaBuff::new("udmabuf1")?;
+    let dma_buffer_h2d = DmaBuffer::new("udmabuf0")?;
+    let dma_buffer_d2h = DmaBuffer::new("udmabuf1")?;
     println!("{:?}", dma_buffer_h2d);
     println!("{:?}", dma_buffer_d2h);
 
     // do not use the whole buffer
-    let max_items = 1024;
+    let max_items = 128;
     let items = std::cmp::min(max_items, dma_buffer_h2d.size()/4);
     let items = std::cmp::min(items, dma_buffer_d2h.size()/4);
 
