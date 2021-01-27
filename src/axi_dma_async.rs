@@ -5,6 +5,7 @@ use std::fs::OpenOptions;
 use std::os::unix::io::AsRawFd;
 use std::fmt;
 use std::ptr;
+use async_io::Async;
 
 use crate::DmaBuff;
 
@@ -19,24 +20,24 @@ const S2MM_DA:     isize = 0x48 / 4;
 const S2MM_DA_MSB: isize = 0x4C / 4;
 const S2MM_LENGTH: isize = 0x58 / 4;
 
-pub struct AxiDma {
+pub struct AxiDmaAsync {
     dev: String,
-    dev_fd: File,
+    dev_fd: Async<File>,
     base: *mut u32,
     size: usize,
 }
 
-impl fmt::Debug for AxiDma {
+impl fmt::Debug for AxiDmaAsync {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "AxiDma ({})", &self.dev)?;
+        writeln!(f, "AxiDmaAsync ({})", &self.dev)?;
         writeln!(f, "  file: {:?}", &self.dev_fd)?;
         writeln!(f, "  base: {:?}", &self.base)?;
-        write!(f, "  size: {:#x?}", &self.size)
+        write!(f,   "  size: {:#x?}", &self.size)
     }
 }
 
-impl AxiDma {
-    pub fn new(uio: &str) -> Result<AxiDma> {
+impl AxiDmaAsync {
+    pub fn new(uio: &str) -> Result<AxiDmaAsync> {
 
         let dev_fd = OpenOptions::new().read(true).write(true).open(format!("/dev/{}", uio))?;
 
@@ -54,15 +55,15 @@ impl AxiDma {
             }
         }
 
-        Ok(AxiDma {
+        Ok(AxiDmaAsync {
             dev: uio.to_string(),
-            dev_fd,
+            dev_fd: Async::new(dev_fd)?,
             base: dev as *mut u32,
             size,
         })
     }
 
-    pub fn start_h2d(&mut self, buff: &DmaBuff, bytes: usize) -> Result<()> {
+    pub async fn start_h2d(&mut self, buff: &DmaBuff, bytes: usize) -> Result<()> {
         debug_assert!(buff.size() >= bytes);
         unsafe {
             // reset controller
@@ -72,7 +73,7 @@ impl AxiDma {
             ptr::write_volatile(self.base.offset(MM2S_DMASR), 0x1000);
 
             // enable irqs for uio driver
-            self.dev_fd.write(&[1u8, 0, 0, 0])?;
+            self.dev_fd.write_with_mut(|s| s.write(&[1u8, 0, 0, 0])).await?;
 
             // Configure AXIDMA - MM2S (PS -> PL)
             ptr::write_volatile(self.base.offset(MM2S_DMACR), 0x1001);
@@ -83,7 +84,7 @@ impl AxiDma {
         Ok(())
     }
 
-    pub fn start_d2h(&mut self, buff: &DmaBuff, bytes: usize) -> Result<()> {
+    pub async fn start_d2h(&mut self, buff: &DmaBuff, bytes: usize) -> Result<()> {
         debug_assert!(buff.size() >= bytes);
         unsafe {
             // reset controller
@@ -93,7 +94,7 @@ impl AxiDma {
             ptr::write_volatile(self.base.offset(S2MM_DMASR), 0x1000);
 
             // enable irqs for uio driver
-            self.dev_fd.write(&[1u8, 0, 0, 0])?;
+            self.dev_fd.write_with_mut(|s| s.write(&[1u8, 0, 0, 0])).await?;
 
             // Configure AXIDMA - S2MM (PL -> PS)
             ptr::write_volatile(self.base.offset(S2MM_DMACR), 0x1001);
@@ -104,20 +105,20 @@ impl AxiDma {
         Ok(())
     }
 
-    pub fn wait_d2h(&mut self) -> Result<()> {
+    pub async fn wait_d2h(&mut self) -> Result<()> {
         let mut buf = [0u8; 4];
-        self.dev_fd.read(&mut buf)?;
+        self.dev_fd.read_with_mut(|s| s.read(&mut buf)).await?;
         Ok(())
     }
 
-    pub fn wait_h2d(&mut self) -> Result<()> {
+    pub async fn wait_h2d(&mut self) -> Result<()> {
         let mut buf = [0u8; 4];
-        self.dev_fd.read(&mut buf)?;
+        self.dev_fd.read_with_mut(|s| s.read(&mut buf)).await?;
         Ok(())
     }
 }
 
-impl Drop for AxiDma {
+impl Drop for AxiDmaAsync {
     fn drop(&mut self) {
         unsafe {
             libc::munmap(self.base as *mut libc::c_void, self.size);
