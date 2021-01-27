@@ -23,7 +23,7 @@ impl fmt::Debug for DmaBuff {
         writeln!(f, "  phys_addr: {:#x?}", &self.phys_addr)?;
         writeln!(f, "  buffer: {:?}", &self.buffer)?;
         writeln!(f, "  sync_mode: {:?}", &self.sync_mode)?;
-        write!(f, "  debug_vma: {:?}", &self.debug_vma)
+        write!(f,   "  debug_vma: {:?}", &self.debug_vma)
     }
 }
 
@@ -85,7 +85,7 @@ impl DmaBuff {
         })
     }
 
-    pub fn slice<T>(&self) -> &[T] {
+    pub fn slice<T>(&self) -> &mut [T] {
         unsafe {
             slice::from_raw_parts_mut(self.buffer as *mut T, self.size / mem::size_of::<T>())
         }

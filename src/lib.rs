@@ -1,6 +1,9 @@
 mod dma_buff;
 pub use dma_buff::DmaBuff;
 
+mod axi_dma;
+pub use axi_dma::AxiDma;
+
 
 // use std::io::prelude::*;
 // use std::fs::File;
