@@ -1,0 +1,12 @@
+[package]
+name = "xilinx-dma"
+version = "0.1.0"
+authors = ["Bastian Bloessl <mail@bastibl.net>"]
+edition = "2018"
+
+[dependencies]
+libc = "0.2.82"
+anyhow = "1.0.38"
+
+[dev-dependencies]
+fastrand = "1.4.0"
