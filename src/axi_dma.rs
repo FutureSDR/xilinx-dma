@@ -124,3 +124,5 @@ impl Drop for AxiDma {
         }
     }
 }
+
+unsafe impl Send for AxiDma {}

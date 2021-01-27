@@ -124,3 +124,4 @@ impl Drop for DmaBuffer {
     }
 }
 
+unsafe impl Send for DmaBuffer {}

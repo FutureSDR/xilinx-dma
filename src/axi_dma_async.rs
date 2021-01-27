@@ -125,3 +125,5 @@ impl Drop for AxiDmaAsync {
         }
     }
 }
+
+unsafe impl Send for AxiDmaAsync {}
