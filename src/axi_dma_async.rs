@@ -20,6 +20,11 @@ const S2MM_DA:     isize = 0x48 / 4;
 const S2MM_DA_MSB: isize = 0x4C / 4;
 const S2MM_LENGTH: isize = 0x58 / 4;
 
+#[link(name = "dmb")]
+extern "C" {
+    fn dmb();
+}
+
 pub struct AxiDmaAsync {
     dev: String,
     dev_fd: Async<File>,
@@ -66,6 +71,9 @@ impl AxiDmaAsync {
     pub async fn start_h2d(&mut self, buff: &DmaBuffer, bytes: usize) -> Result<()> {
         debug_assert!(buff.size() >= bytes);
         unsafe {
+            // Ensure that the DDR buffer has been written to
+            dmb();
+
             // clear irqs in dma
             ptr::write_volatile(self.base.offset(MM2S_DMASR), 0x7000);
 
