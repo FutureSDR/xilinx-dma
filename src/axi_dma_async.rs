@@ -8,6 +8,7 @@ use std::ptr;
 use async_io::Async;
 
 use crate::DmaBuffer;
+use crate::dmb::dmb;
 
 const MM2S_DMACR:  isize = 0x0  / 4;
 const MM2S_DMASR:  isize = 0x4  / 4;
@@ -20,10 +21,6 @@ const S2MM_DA:     isize = 0x48 / 4;
 const S2MM_DA_MSB: isize = 0x4C / 4;
 const S2MM_LENGTH: isize = 0x58 / 4;
 
-#[link(name = "dmb")]
-extern "C" {
-    fn dmb();
-}
 
 pub struct AxiDmaAsync {
     dev: String,
