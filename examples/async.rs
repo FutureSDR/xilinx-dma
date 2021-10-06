@@ -1,9 +1,8 @@
 use anyhow::Result;
-use xilinx_dma::DmaBuffer;
 use xilinx_dma::AxiDmaAsync;
+use xilinx_dma::DmaBuffer;
 
 fn main() -> Result<()> {
-
     let dma_buffer_h2d = DmaBuffer::new("udmabuf0")?;
     let dma_buffer_d2h = DmaBuffer::new("udmabuf1")?;
     println!("{:?}", dma_buffer_h2d);
@@ -11,8 +10,8 @@ fn main() -> Result<()> {
 
     // do not use the whole buffer
     let max_items = 1024;
-    let items = std::cmp::min(max_items, dma_buffer_h2d.size()/4);
-    let items = std::cmp::min(items, dma_buffer_d2h.size()/4);
+    let items = std::cmp::min(max_items, dma_buffer_h2d.size() / 4);
+    let items = std::cmp::min(items, dma_buffer_d2h.size() / 4);
 
     let slice_h2d = &mut dma_buffer_h2d.slice::<u32>()[0..items];
     let slice_d2h = &mut dma_buffer_d2h.slice::<u32>()[0..items];
@@ -31,8 +30,8 @@ fn main() -> Result<()> {
     println!("{:?}", dma_d2h);
 
     async_io::block_on(async {
-        dma_h2d.start_h2d(&dma_buffer_h2d, items*4).await?;
-        dma_d2h.start_d2h(&dma_buffer_d2h, items*4).await?;
+        dma_h2d.start_h2d(&dma_buffer_h2d, items * 4).await?;
+        dma_d2h.start_d2h(&dma_buffer_d2h, items * 4).await?;
         println!("transfers started");
 
         dma_h2d.wait_h2d().await?;

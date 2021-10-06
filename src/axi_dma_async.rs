@@ -1,26 +1,25 @@
 use anyhow::Result;
-use std::io::prelude::*;
+use async_io::Async;
+use std::fmt;
 use std::fs::File;
 use std::fs::OpenOptions;
+use std::io::prelude::*;
 use std::os::unix::io::AsRawFd;
-use std::fmt;
 use std::ptr;
-use async_io::Async;
 
-use crate::DmaBuffer;
 use crate::dmb;
+use crate::DmaBuffer;
 
-const MM2S_DMACR:  isize = 0x0  / 4;
-const MM2S_DMASR:  isize = 0x4  / 4;
-const MM2S_SA:     isize = 0x18 / 4;
+const MM2S_DMACR: isize = 0x0 / 4;
+const MM2S_DMASR: isize = 0x4 / 4;
+const MM2S_SA: isize = 0x18 / 4;
 const MM2S_SA_MSB: isize = 0x1C / 4;
 const MM2S_LENGTH: isize = 0x28 / 4;
-const S2MM_DMACR:  isize = 0x30 / 4;
-const S2MM_DMASR:  isize = 0x34 / 4;
-const S2MM_DA:     isize = 0x48 / 4;
+const S2MM_DMACR: isize = 0x30 / 4;
+const S2MM_DMASR: isize = 0x34 / 4;
+const S2MM_DA: isize = 0x48 / 4;
 const S2MM_DA_MSB: isize = 0x4C / 4;
 const S2MM_LENGTH: isize = 0x58 / 4;
-
 
 pub struct AxiDmaAsync {
     dev: String,
@@ -34,14 +33,16 @@ impl fmt::Debug for AxiDmaAsync {
         writeln!(f, "AxiDmaAsync ({})", &self.dev)?;
         writeln!(f, "  file: {:?}", &self.dev_fd)?;
         writeln!(f, "  base: {:?}", &self.base)?;
-        write!(f,   "  size: {:#x?}", &self.size)
+        write!(f, "  size: {:#x?}", &self.size)
     }
 }
 
 impl AxiDmaAsync {
     pub fn new(uio: &str) -> Result<AxiDmaAsync> {
-
-        let dev_fd = OpenOptions::new().read(true).write(true).open(format!("/dev/{}", uio))?;
+        let dev_fd = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(format!("/dev/{}", uio))?;
 
         let mut size_f = File::open(format!("/sys/class/uio/{}/maps/map0/size", uio))?;
         let mut buf = String::new();
@@ -51,7 +52,14 @@ impl AxiDmaAsync {
 
         let dev;
         unsafe {
-            dev = libc::mmap(0 as *mut libc::c_void, size, libc::PROT_READ|libc::PROT_WRITE, libc::MAP_SHARED, dev_fd.as_raw_fd(), 0);
+            dev = libc::mmap(
+                0 as *mut libc::c_void,
+                size,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_SHARED,
+                dev_fd.as_raw_fd(),
+                0,
+            );
             if dev == libc::MAP_FAILED {
                 anyhow::bail!("mapping dma buffer into virtual memory failed");
             }
@@ -75,12 +83,20 @@ impl AxiDmaAsync {
             ptr::write_volatile(self.base.offset(MM2S_DMASR), 0x7000);
 
             // enable irqs for uio driver
-            self.dev_fd.write_with_mut(|s| s.write(&[1u8, 0, 0, 0])).await?;
+            self.dev_fd
+                .write_with_mut(|s| s.write(&[1u8, 0, 0, 0]))
+                .await?;
 
             // Configure AXIDMA - MM2S (PS -> PL)
             ptr::write_volatile(self.base.offset(MM2S_DMACR), 0x7001);
-            ptr::write_volatile(self.base.offset(MM2S_SA), (buff.phys_addr() & 0xffff_ffff) as u32);
-            ptr::write_volatile(self.base.offset(MM2S_SA_MSB), buff.phys_addr().wrapping_shr(32) as u32);
+            ptr::write_volatile(
+                self.base.offset(MM2S_SA),
+                (buff.phys_addr() & 0xffff_ffff) as u32,
+            );
+            ptr::write_volatile(
+                self.base.offset(MM2S_SA_MSB),
+                buff.phys_addr().wrapping_shr(32) as u32,
+            );
             ptr::write_volatile(self.base.offset(MM2S_LENGTH), bytes as u32);
         }
         Ok(())
@@ -93,12 +109,20 @@ impl AxiDmaAsync {
             ptr::write_volatile(self.base.offset(S2MM_DMASR), 0x7000);
 
             // enable irqs for uio driver
-            self.dev_fd.write_with_mut(|s| s.write(&[1u8, 0, 0, 0])).await?;
+            self.dev_fd
+                .write_with_mut(|s| s.write(&[1u8, 0, 0, 0]))
+                .await?;
 
             // Configure AXIDMA - S2MM (PL -> PS)
             ptr::write_volatile(self.base.offset(S2MM_DMACR), 0x7001);
-            ptr::write_volatile(self.base.offset(S2MM_DA), (buff.phys_addr() & 0xffff_ffff) as u32);
-            ptr::write_volatile(self.base.offset(S2MM_DA_MSB), buff.phys_addr().wrapping_shr(32) as u32);
+            ptr::write_volatile(
+                self.base.offset(S2MM_DA),
+                (buff.phys_addr() & 0xffff_ffff) as u32,
+            );
+            ptr::write_volatile(
+                self.base.offset(S2MM_DA_MSB),
+                buff.phys_addr().wrapping_shr(32) as u32,
+            );
             ptr::write_volatile(self.base.offset(S2MM_LENGTH), bytes as u32);
         }
         Ok(())
@@ -141,13 +165,13 @@ impl AxiDmaAsync {
         if c & 4 != 0 {
             print!("resetting, ");
         }
-        if c & 1<<12 != 0 {
+        if c & 1 << 12 != 0 {
             print!("ioc_irq_en, ");
         }
-        if c & 1<<13 != 0 {
+        if c & 1 << 13 != 0 {
             print!("dly_irq_en, ");
         }
-        if c & 1<<14 != 0 {
+        if c & 1 << 14 != 0 {
             print!("err_irq_en, ");
         }
         println!("");
@@ -170,31 +194,31 @@ impl AxiDmaAsync {
         } else {
             print!("register mode, ");
         }
-        if c & 1<<4 != 0 {
+        if c & 1 << 4 != 0 {
             print!("internal error, ");
         }
-        if c & 1<<5 != 0 {
+        if c & 1 << 5 != 0 {
             print!("slave error, ");
         }
-        if c & 1<<6 != 0 {
+        if c & 1 << 6 != 0 {
             print!("decode error, ");
         }
-        if c & 1<<8 != 0 {
+        if c & 1 << 8 != 0 {
             print!("sg internal error, ");
         }
-        if c & 1<<9 != 0 {
+        if c & 1 << 9 != 0 {
             print!("sg slave error, ");
         }
-        if c & 1<<10 != 0 {
+        if c & 1 << 10 != 0 {
             print!("sg dec error, ");
         }
-        if c & 1<<12 != 0 {
+        if c & 1 << 12 != 0 {
             print!("ioc_irq, ");
         }
-        if c & 1<<13 != 0 {
+        if c & 1 << 13 != 0 {
             print!("dly_irq, ");
         }
-        if c & 1<<14 != 0 {
+        if c & 1 << 14 != 0 {
             print!("err_irq, ");
         }
         println!("");
@@ -214,13 +238,13 @@ impl AxiDmaAsync {
         if c & 4 != 0 {
             print!("resetting, ");
         }
-        if c & 1<<12 != 0 {
+        if c & 1 << 12 != 0 {
             print!("ioc_irq_en, ");
         }
-        if c & 1<<13 != 0 {
+        if c & 1 << 13 != 0 {
             print!("dly_irq_en, ");
         }
-        if c & 1<<14 != 0 {
+        if c & 1 << 14 != 0 {
             print!("err_irq_en, ");
         }
         println!("");
@@ -243,31 +267,31 @@ impl AxiDmaAsync {
         } else {
             print!("register mode, ");
         }
-        if c & 1<<4 != 0 {
+        if c & 1 << 4 != 0 {
             print!("internal error, ");
         }
-        if c & 1<<5 != 0 {
+        if c & 1 << 5 != 0 {
             print!("slave error, ");
         }
-        if c & 1<<6 != 0 {
+        if c & 1 << 6 != 0 {
             print!("decode error, ");
         }
-        if c & 1<<8 != 0 {
+        if c & 1 << 8 != 0 {
             print!("sg internal error, ");
         }
-        if c & 1<<9 != 0 {
+        if c & 1 << 9 != 0 {
             print!("sg slave error, ");
         }
-        if c & 1<<10 != 0 {
+        if c & 1 << 10 != 0 {
             print!("sg dec error, ");
         }
-        if c & 1<<12 != 0 {
+        if c & 1 << 12 != 0 {
             print!("ioc_irq, ");
         }
-        if c & 1<<13 != 0 {
+        if c & 1 << 13 != 0 {
             print!("dly_irq, ");
         }
-        if c & 1<<14 != 0 {
+        if c & 1 << 14 != 0 {
             print!("err_irq, ");
         }
         println!("");

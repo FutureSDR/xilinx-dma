@@ -5,7 +5,6 @@ pub use axi_dma::AxiDma;
 pub use axi_dma_async::AxiDmaAsync;
 pub use dma_buffer::DmaBuffer;
 
-
 #[cfg(any(target_arch = "armv7", target_arch = "aarch64"))]
 mod dmb;
 #[cfg(any(target_arch = "armv7", target_arch = "aarch64"))]

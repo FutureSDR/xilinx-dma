@@ -1,10 +1,10 @@
 use anyhow::Result;
-use std::io::prelude::*;
 use std::fmt;
 use std::fs::File;
 use std::fs::OpenOptions;
-use std::os::unix::io::AsRawFd;
+use std::io::prelude::*;
 use std::mem;
+use std::os::unix::io::AsRawFd;
 use std::slice;
 
 pub struct DmaBuffer {
@@ -23,13 +23,12 @@ impl fmt::Debug for DmaBuffer {
         writeln!(f, "  phys_addr: {:#x?}", &self.phys_addr)?;
         writeln!(f, "  buffer: {:?}", &self.buffer)?;
         writeln!(f, "  sync_mode: {:?}", &self.sync_mode)?;
-        write!(f,   "  debug_vma: {:?}", &self.debug_vma)
+        write!(f, "  debug_vma: {:?}", &self.debug_vma)
     }
 }
 
 impl DmaBuffer {
     pub fn new(name: &str) -> Result<DmaBuffer> {
-
         let phy_f = format!("/sys/class/u-dma-buf/{}/phys_addr", name);
         let mut phy_f = File::open(phy_f)?;
         let mut buff = String::new();
@@ -48,28 +47,27 @@ impl DmaBuffer {
         let mut debug_f = File::open(debug_f)?;
         let mut buff = String::new();
         debug_f.read_to_string(&mut buff)?;
-        let debug_vma = if buff.trim() == "0" {
-            false
-        } else {
-            true
-        };
+        let debug_vma = if buff.trim() == "0" { false } else { true };
 
         let sync_f = format!("/sys/class/u-dma-buf/{}/sync_mode", name);
         let mut sync_f = File::open(sync_f)?;
         let mut buff = String::new();
         sync_f.read_to_string(&mut buff)?;
-        let sync_mode = if buff.trim() == "0" {
-            false
-        } else {
-            true
-        };
+        let sync_mode = if buff.trim() == "0" { false } else { true };
 
         let dev = format!("/dev/{}", name);
         let dev = OpenOptions::new().read(true).write(true).open(dev)?;
 
         let buffer;
         unsafe {
-            buffer = libc::mmap(0 as *mut libc::c_void, size, libc::PROT_READ|libc::PROT_WRITE, libc::MAP_SHARED, dev.as_raw_fd(), 0);
+            buffer = libc::mmap(
+                0 as *mut libc::c_void,
+                size,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_SHARED,
+                dev.as_raw_fd(),
+                0,
+            );
             if buffer == libc::MAP_FAILED {
                 anyhow::bail!("mapping dma buffer into virtual memory failed");
             }
@@ -86,9 +84,7 @@ impl DmaBuffer {
     }
 
     pub fn slice<T>(&self) -> &mut [T] {
-        unsafe {
-            slice::from_raw_parts_mut(self.buffer as *mut T, self.size / mem::size_of::<T>())
-        }
+        unsafe { slice::from_raw_parts_mut(self.buffer as *mut T, self.size / mem::size_of::<T>()) }
     }
 
     pub fn name(&self) -> &str {
