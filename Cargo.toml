@@ -6,9 +6,10 @@ edition = "2018"
 license = "Apache-2.0"
 homepage = "https://www.futuresdr.org"
 repository = "https://github.com/futuresdr/xilinx-dma/"
-description = "An Experimental Async SDR Runtime for Heterogeneous Architectures."
-keywords = ["sdr", "radio", "runtime", "async", "acceleration"]
-categories = ["asynchronous", "concurrency", "hardware-support", "science", "wasm"]
+readme = "README.md"
+description = "Userspace Xilinx AXI DMA Interface"
+keywords = ["sdr", "dsp", "real-time", "async", "acceleration"]
+categories = ["asynchronous", "concurrency", "hardware-support", "science"]
 
 [dependencies]
 libc = "0.2.82"
