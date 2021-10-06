@@ -1,10 +1,15 @@
-#[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
+use std::sync::atomic::compiler_fence;
+use std::sync::atomic::Ordering;
+
 #[link(name = "dmb")]
 extern "C" {
-    pub fn dmb();
+    pub fn __dmb();
 }
-
-#[cfg(not(any(target_arch = "arm", target_arch = "aarch64")))]
+#[inline(always)]
 pub fn dmb() {
-    // DMB is ARM-only, so we use a nop in other archs
+    compiler_fence(Ordering::SeqCst);
+    unsafe {
+        __dmb();
+    }
+    compiler_fence(Ordering::SeqCst);
 }

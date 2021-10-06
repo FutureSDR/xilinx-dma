@@ -7,7 +7,7 @@ use std::fmt;
 use std::ptr;
 
 use crate::DmaBuffer;
-use crate::dmb::dmb;
+use crate::dmb;
 
 const MM2S_DMACR:  isize = 0x0  / 4;
 const MM2S_DMASR:  isize = 0x4  / 4;
