@@ -10,7 +10,9 @@ use std::ptr;
 use crate::dmb;
 use crate::DmaBuffer;
 
+#[allow(clippy::erasing_op)]
 const MM2S_DMACR: isize = 0x0 / 4;
+#[allow(clippy::eq_op)]
 const MM2S_DMASR: isize = 0x4 / 4;
 const MM2S_SA: isize = 0x18 / 4;
 const MM2S_SA_MSB: isize = 0x1C / 4;
@@ -53,7 +55,7 @@ impl AxiDmaAsync {
         let dev;
         unsafe {
             dev = libc::mmap(
-                0 as *mut libc::c_void,
+                std::ptr::null_mut::<libc::c_void>(),
                 size,
                 libc::PROT_READ | libc::PROT_WRITE,
                 libc::MAP_SHARED,
@@ -89,6 +91,7 @@ impl AxiDmaAsync {
 
             // Configure AXIDMA - MM2S (PS -> PL)
             ptr::write_volatile(self.base.offset(MM2S_DMACR), 0x7001);
+            #[allow(clippy::identity_op)]
             ptr::write_volatile(
                 self.base.offset(MM2S_SA),
                 (buff.phys_addr() & 0xffff_ffff) as u32,
@@ -115,6 +118,7 @@ impl AxiDmaAsync {
 
             // Configure AXIDMA - S2MM (PL -> PS)
             ptr::write_volatile(self.base.offset(S2MM_DMACR), 0x7001);
+            #[allow(clippy::identity_op)]
             ptr::write_volatile(
                 self.base.offset(S2MM_DA),
                 (buff.phys_addr() & 0xffff_ffff) as u32,
@@ -174,7 +178,7 @@ impl AxiDmaAsync {
         if c & 1 << 14 != 0 {
             print!("err_irq_en, ");
         }
-        println!("");
+        println!();
         unsafe {
             c = ptr::read_volatile(self.base.offset(MM2S_DMASR));
         }
@@ -221,7 +225,7 @@ impl AxiDmaAsync {
         if c & 1 << 14 != 0 {
             print!("err_irq, ");
         }
-        println!("");
+        println!();
     }
 
     pub fn status_d2h(&self) {
@@ -247,7 +251,7 @@ impl AxiDmaAsync {
         if c & 1 << 14 != 0 {
             print!("err_irq_en, ");
         }
-        println!("");
+        println!();
         unsafe {
             c = ptr::read_volatile(self.base.offset(S2MM_DMASR));
         }
@@ -294,7 +298,7 @@ impl AxiDmaAsync {
         if c & 1 << 14 != 0 {
             print!("err_irq, ");
         }
-        println!("");
+        println!();
     }
 
     pub async fn wait_d2h(&mut self) -> Result<()> {

@@ -47,13 +47,13 @@ impl DmaBuffer {
         let mut debug_f = File::open(debug_f)?;
         let mut buff = String::new();
         debug_f.read_to_string(&mut buff)?;
-        let debug_vma = if buff.trim() == "0" { false } else { true };
+        let debug_vma = buff.trim() != "0";
 
         let sync_f = format!("/sys/class/u-dma-buf/{}/sync_mode", name);
         let mut sync_f = File::open(sync_f)?;
         let mut buff = String::new();
         sync_f.read_to_string(&mut buff)?;
-        let sync_mode = if buff.trim() == "0" { false } else { true };
+        let sync_mode = buff.trim() != "0";
 
         let dev = format!("/dev/{}", name);
         let dev = OpenOptions::new().read(true).write(true).open(dev)?;
@@ -61,7 +61,7 @@ impl DmaBuffer {
         let buffer;
         unsafe {
             buffer = libc::mmap(
-                0 as *mut libc::c_void,
+                std::ptr::null_mut::<libc::c_void>(),
                 size,
                 libc::PROT_READ | libc::PROT_WRITE,
                 libc::MAP_SHARED,
@@ -83,6 +83,7 @@ impl DmaBuffer {
         })
     }
 
+    #[allow(clippy::mut_from_ref)]
     pub fn slice<T>(&self) -> &mut [T] {
         unsafe { slice::from_raw_parts_mut(self.buffer as *mut T, self.size / mem::size_of::<T>()) }
     }
