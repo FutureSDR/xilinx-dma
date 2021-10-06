@@ -1,15 +1,15 @@
 use std::env;
 
 fn main() {
-    let arch =
-        env::var("CARGO_CFG_TARGET_ARCH").expect("Env variable CARGO_CFG_TARGET_ARCH not found");
+    let target = env::var("TARGET").expect("Env variable TARGET not found");
 
-    if arch != "armv7" && arch != "aarch64" {
-        // dmb is only available in armv7 and aarch64
-        return;
+    // dmb is only available in armv7 and aarch64
+    if target.starts_with("armv7") || target.starts_with("aarch64") {
+        let mut build = cc::Build::new();
+        build.file("dmb.c");
+        build.compile("dmb");
+
+        println!("cargo:rustc-cfg=xilinx_dma_has_dmb");
+        println!("cargo:rerun-if-changed=dmb.c");
     }
-
-    let mut build = cc::Build::new();
-    build.file("dmb.c");
-    build.compile("dmb");
 }
