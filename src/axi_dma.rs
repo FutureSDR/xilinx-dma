@@ -307,6 +307,10 @@ impl AxiDma {
         self.dev_fd.read_exact(&mut buf)?;
         Ok(())
     }
+
+    pub fn size_d2h(&self) -> usize {
+        unsafe { ptr::read_volatile(self.base.offset(S2MM_LENGTH)) as usize }
+    }
 }
 
 impl Drop for AxiDma {
