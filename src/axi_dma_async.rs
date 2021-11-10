@@ -312,6 +312,10 @@ impl AxiDmaAsync {
         self.dev_fd.read_with_mut(|s| s.read(&mut buf)).await?;
         Ok(())
     }
+
+    pub fn size_d2h(&self) -> usize {
+        unsafe { ptr::read_volatile(self.base.offset(S2MM_LENGTH)) as usize }
+    }
 }
 
 impl Drop for AxiDmaAsync {
