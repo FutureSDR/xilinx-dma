@@ -11,14 +11,18 @@ description = "Userspace Xilinx AXI DMA Interface"
 keywords = ["sdr", "dsp", "real-time", "async", "acceleration"]
 categories = ["asynchronous", "concurrency", "hardware-support", "science"]
 
+[[example]]
+name = "async"
+required-features = ["async"]
+
 [features]
-default = ["async"]
-async = ["async-io"]
+default = []
+async = ["dep:async-io"]
 
 [dependencies]
 libc = "0.2"
 anyhow = "1.0"
-async-io = { version = "1.3.1", optional = true }
+async-io = { version = "1.13", optional = true }
 
 [dev-dependencies]
 fastrand = "2.0"
