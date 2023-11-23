@@ -98,7 +98,7 @@ impl AxiDmaAsync {
             );
             ptr::write_volatile(
                 self.base.offset(MM2S_SA_MSB),
-                buff.phys_addr().wrapping_shr(32) as u32,
+                (buff.phys_addr() & !0xffff_ffff).wrapping_shr(32) as u32,
             );
             ptr::write_volatile(self.base.offset(MM2S_LENGTH), bytes as u32);
         }
@@ -125,7 +125,7 @@ impl AxiDmaAsync {
             );
             ptr::write_volatile(
                 self.base.offset(S2MM_DA_MSB),
-                buff.phys_addr().wrapping_shr(32) as u32,
+                (buff.phys_addr() & !0xffff_ffff).wrapping_shr(32) as u32,
             );
             ptr::write_volatile(self.base.offset(S2MM_LENGTH), bytes as u32);
         }
