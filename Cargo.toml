@@ -22,7 +22,7 @@ async = ["dep:async-io"]
 [dependencies]
 libc = "0.2"
 anyhow = "1.0"
-async-io = { version = "1.13", optional = true }
+async-io = { version = "2.2", optional = true }
 
 [dev-dependencies]
 fastrand = "2.0"

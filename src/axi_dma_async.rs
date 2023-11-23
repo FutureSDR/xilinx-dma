@@ -303,13 +303,13 @@ impl AxiDmaAsync {
 
     pub async fn wait_d2h(&mut self) -> Result<()> {
         let mut buf = [0u8; 4];
-        self.dev_fd.read_with_mut(|s| s.read(&mut buf)).await?;
+        unsafe { self.dev_fd.read_with_mut(|s| s.read(&mut buf)).await? };
         Ok(())
     }
 
     pub async fn wait_h2d(&mut self) -> Result<()> {
         let mut buf = [0u8; 4];
-        self.dev_fd.read_with_mut(|s| s.read(&mut buf)).await?;
+        unsafe { self.dev_fd.read_with_mut(|s| s.read(&mut buf)).await? };
         Ok(())
     }
 
