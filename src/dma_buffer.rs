@@ -14,6 +14,8 @@ pub struct DmaBuffer {
     buffer: *mut libc::c_void,
     sync_mode: bool,
     debug_vma: bool,
+    sync_for_cpu: File,
+    sync_for_device: File,
 }
 
 impl fmt::Debug for DmaBuffer {
@@ -55,6 +57,14 @@ impl DmaBuffer {
         sync_f.read_to_string(&mut buff)?;
         let sync_mode = buff.trim() != "0";
 
+        let mut sync_open_options = OpenOptions::new();
+        sync_open_options.write(true);
+        let sync_for_cpu = format!("/sys/class/u-dma-buf/{}/sync_for_cpu", name);
+        let sync_for_cpu = sync_open_options.open(sync_for_cpu)?;
+
+        let sync_for_device = format!("/sys/class/u-dma-buf/{}/sync_for_device", name);
+        let sync_for_device = sync_open_options.write(true).open(sync_for_device)?;
+
         let dev = format!("/dev/{}", name);
         let dev = OpenOptions::new().read(true).write(true).open(dev)?;
 
@@ -80,6 +90,8 @@ impl DmaBuffer {
             buffer,
             sync_mode,
             debug_vma,
+            sync_for_cpu,
+            sync_for_device,
         })
     }
 
@@ -110,6 +122,16 @@ impl DmaBuffer {
 
     pub fn debug_vma(&self) -> bool {
         self.debug_vma
+    }
+
+    pub fn sync_for_cpu(&mut self) -> Result<()> {
+        self.sync_for_cpu.write_all(b"1")?;
+        Ok(())
+    }
+
+    pub fn sync_for_device(&mut self) -> Result<()> {
+        self.sync_for_device.write_all(b"1")?;
+        Ok(())
     }
 }
 

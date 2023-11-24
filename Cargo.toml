@@ -15,9 +15,14 @@ categories = ["asynchronous", "concurrency", "hardware-support", "science"]
 name = "async"
 required-features = ["async"]
 
+[[example]]
+name = "sg_loopback"
+required-features = ["scatter-gather"]
+
 [features]
 default = []
 async = ["dep:async-io"]
+scatter-gather = []
 
 [dependencies]
 libc = "0.2"
