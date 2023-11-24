@@ -16,12 +16,12 @@ mod scatter_gather;
 #[cfg(feature = "scatter-gather")]
 pub use scatter_gather::{SgDescriptor, SG_DESCRIPTOR_LEN};
 
-#[cfg(xilinx_dma_has_dmb)]
+#[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
 mod dmb;
-#[cfg(xilinx_dma_has_dmb)]
+#[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
 pub use dmb::dmb;
 
-#[cfg(not(xilinx_dma_has_dmb))]
+#[cfg(not(any(target_arch = "arm", target_arch = "aarch64")))]
 #[inline(always)]
 pub fn dmb() {
     // DMB is ARM-only, so we use a nop in other archs
