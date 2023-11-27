@@ -3,6 +3,7 @@ use std::fmt;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
+use std::os::fd::RawFd;
 use std::os::unix::io::AsRawFd;
 use std::ptr;
 
@@ -10,6 +11,11 @@ use crate::dmb;
 use crate::DmaBuffer;
 #[cfg(feature = "scatter-gather")]
 use crate::SgDescriptor;
+
+#[cfg(feature = "async")]
+mod axi_dma_async;
+#[cfg(feature = "async")]
+pub use axi_dma_async::AxiDmaAsync;
 
 #[allow(clippy::erasing_op)]
 const MM2S_DMACR: isize = 0x0 / 4;
@@ -41,18 +47,22 @@ const S2MM_DA_MSB: isize = 0x4C / 4;
 const S2MM_LENGTH: isize = 0x58 / 4;
 
 pub struct AxiDma {
-    dev: String,
     dev_fd: File,
+    dma: AxiDmaBase,
+}
+
+struct AxiDmaBase {
+    dev: String,
     base: *mut u32,
     size: usize,
 }
 
 impl fmt::Debug for AxiDma {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "AxiDma ({})", &self.dev)?;
+        writeln!(f, "AxiDma ({})", &self.dma.dev)?;
         writeln!(f, "  file: {:?}", &self.dev_fd)?;
-        writeln!(f, "  base: {:?}", &self.base)?;
-        write!(f, "  size: {:#x?}", &self.size)
+        writeln!(f, "  base: {:?}", &self.dma.base)?;
+        write!(f, "  size: {:#x?}", &self.dma.size)
     }
 }
 
@@ -62,7 +72,106 @@ impl AxiDma {
             .read(true)
             .write(true)
             .open(format!("/dev/{}", uio))?;
+        let dma = AxiDmaBase::new(uio, dev_fd.as_raw_fd())?;
+        Ok(AxiDma { dev_fd, dma })
+    }
 
+    pub fn start_h2d(&mut self, buff: &DmaBuffer, bytes: usize) -> Result<()> {
+        self.dma.start_h2d_ini(buff, bytes);
+        self.enable_uio_irqs()?;
+        self.dma.start_h2d_fini(buff, bytes);
+        Ok(())
+    }
+
+    pub fn start_d2h(&mut self, buff: &DmaBuffer, bytes: usize) -> Result<()> {
+        self.dma.start_d2h_ini(buff, bytes);
+        self.enable_uio_irqs()?;
+        self.dma.start_d2h_fini(buff, bytes);
+        Ok(())
+    }
+
+    fn enable_uio_irqs(&mut self) -> Result<()> {
+        self.dev_fd.write_all(&[1u8, 0, 0, 0])?;
+        Ok(())
+    }
+
+    #[cfg(feature = "scatter-gather")]
+    pub fn enqueue_sg_h2d(&mut self, descriptor: &mut SgDescriptor) -> Result<()> {
+        self.dma.enqueue_sg_h2d(descriptor)
+    }
+
+    #[cfg(feature = "scatter-gather")]
+    pub fn enqueue_sg_d2h(&mut self, descriptor: &mut SgDescriptor) -> Result<()> {
+        self.dma.enqueue_sg_d2h(descriptor)
+    }
+
+    #[cfg(feature = "scatter-gather")]
+    pub fn wait_sg_complete_h2d(&mut self, descriptor: &SgDescriptor) -> Result<()> {
+        loop {
+            if descriptor.completed() {
+                dmb(); // the complete flag acts as an acquire lock
+                break;
+            }
+
+            // Wait for an interrupt that might indicate that the descriptor has
+            // been completed.
+            self.enable_uio_irqs()?;
+            self.wait_h2d()?;
+
+            self.dma.wait_sg_complete_h2d_fini()?;
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "scatter-gather")]
+    pub fn wait_sg_complete_d2h(&mut self, descriptor: &SgDescriptor) -> Result<()> {
+        loop {
+            if descriptor.completed() {
+                dmb(); // the complete flag acts as an acquire lock
+                break;
+            }
+
+            // Wait for an interrupt that might indicate that the descriptor has
+            // been completed.
+            self.enable_uio_irqs()?;
+            self.wait_d2h()?;
+
+            self.dma.wait_sg_complete_d2h_fini()?;
+        }
+        Ok(())
+    }
+
+    pub fn reset(&mut self) {
+        self.dma.reset();
+    }
+
+    pub fn status_h2d(&self) {
+        self.dma.status_h2d();
+    }
+
+    pub fn status_d2h(&self) {
+        self.dma.status_d2h();
+    }
+
+    pub fn wait_d2h(&mut self) -> Result<()> {
+        let mut buf = [0u8; 4];
+        self.dev_fd.read_exact(&mut buf)?;
+        Ok(())
+    }
+
+    pub fn wait_h2d(&mut self) -> Result<()> {
+        let mut buf = [0u8; 4];
+        self.dev_fd.read_exact(&mut buf)?;
+        Ok(())
+    }
+
+    pub fn size_d2h(&self) -> usize {
+        self.dma.size_d2h()
+    }
+}
+
+impl AxiDmaBase {
+    fn new(uio: &str, dev_fd: RawFd) -> Result<AxiDmaBase> {
         let mut size_f = File::open(format!("/sys/class/uio/{}/maps/map0/size", uio))?;
         let mut buf = String::new();
         size_f.read_to_string(&mut buf)?;
@@ -76,7 +185,7 @@ impl AxiDma {
                 size,
                 libc::PROT_READ | libc::PROT_WRITE,
                 libc::MAP_SHARED,
-                dev_fd.as_raw_fd(),
+                dev_fd,
                 0,
             );
             if dev == libc::MAP_FAILED {
@@ -84,15 +193,14 @@ impl AxiDma {
             }
         }
 
-        Ok(AxiDma {
+        Ok(AxiDmaBase {
             dev: uio.to_string(),
-            dev_fd,
             base: dev as *mut u32,
             size,
         })
     }
 
-    pub fn start_h2d(&mut self, buff: &DmaBuffer, bytes: usize) -> Result<()> {
+    fn start_h2d_ini(&mut self, buff: &DmaBuffer, bytes: usize) {
         debug_assert!(buff.size() >= bytes);
         unsafe {
             // Ensure that the DDR buffer has been written to
@@ -100,10 +208,11 @@ impl AxiDma {
 
             // clear irqs in dma
             ptr::write_volatile(self.base.offset(MM2S_DMASR), 0x7000);
+        }
+    }
 
-            // enable irqs for uio driver
-            self.dev_fd.write_all(&[1u8, 0, 0, 0])?;
-
+    fn start_h2d_fini(&mut self, buff: &DmaBuffer, bytes: usize) {
+        unsafe {
             // Configure AXIDMA - MM2S (PS -> PL)
             ptr::write_volatile(self.base.offset(MM2S_DMACR), 0x7001);
             #[allow(clippy::identity_op)]
@@ -117,18 +226,18 @@ impl AxiDma {
             );
             ptr::write_volatile(self.base.offset(MM2S_LENGTH), bytes as u32);
         }
-        Ok(())
     }
 
-    pub fn start_d2h(&mut self, buff: &DmaBuffer, bytes: usize) -> Result<()> {
+    fn start_d2h_ini(&mut self, buff: &DmaBuffer, bytes: usize) {
         debug_assert!(buff.size() >= bytes);
         unsafe {
             // clear irqs in dma
             ptr::write_volatile(self.base.offset(S2MM_DMASR), 0x7000);
+        }
+    }
 
-            // enable irqs for uio driver
-            self.dev_fd.write_all(&[1u8, 0, 0, 0])?;
-
+    fn start_d2h_fini(&mut self, buff: &DmaBuffer, bytes: usize) {
+        unsafe {
             // Configure AXIDMA - S2MM (PL -> PS)
             ptr::write_volatile(self.base.offset(S2MM_DMACR), 0x7001);
             #[allow(clippy::identity_op)]
@@ -142,7 +251,6 @@ impl AxiDma {
             );
             ptr::write_volatile(self.base.offset(S2MM_LENGTH), bytes as u32);
         }
-        Ok(())
     }
 
     #[cfg(feature = "scatter-gather")]
@@ -205,9 +313,8 @@ impl AxiDma {
                 self.base.offset(MM2S_TAILDESC),
                 (descriptor.phys_addr() & 0xffff_ffff) as u32,
             );
-
-            Ok(())
         }
+        Ok(())
     }
 
     #[cfg(feature = "scatter-gather")]
@@ -270,62 +377,33 @@ impl AxiDma {
                 self.base.offset(S2MM_TAILDESC),
                 (descriptor.phys_addr() & 0xffff_ffff) as u32,
             );
-
-            Ok(())
-        }
-    }
-
-    #[cfg(feature = "scatter-gather")]
-    pub fn wait_sg_complete_h2d(&mut self, descriptor: &SgDescriptor) -> Result<()> {
-        loop {
-            if descriptor.completed() {
-                dmb(); // the complete flag acts as an acquire lock
-                break;
-            }
-
-            // Wait for an interrupt that might indicate that the descriptor has
-            // been completed.
-
-            // enable irqs for uio driver
-            self.dev_fd.write_all(&[1u8, 0, 0, 0])?;
-            let mut buf = [0u8; 4];
-            self.dev_fd.read_exact(&mut buf)?;
-            unsafe {
-                // check that there are no errors
-                self.check_errors(ptr::read_volatile(self.base.offset(MM2S_DMASR)))?;
-                // clear irqs in dma
-                ptr::write_volatile(self.base.offset(MM2S_DMASR), 0x7000);
-            }
         }
         Ok(())
     }
 
     #[cfg(feature = "scatter-gather")]
-    pub fn wait_sg_complete_d2h(&mut self, descriptor: &SgDescriptor) -> Result<()> {
-        loop {
-            if descriptor.completed() {
-                dmb(); // the complete flag acts as an acquire lock
-                break;
-            }
-
-            // Wait for an interrupt that might indicate that the descriptor has
-            // been completed.
-
-            // enable irqs for uio driver
-            self.dev_fd.write_all(&[1u8, 0, 0, 0])?;
-            let mut buf = [0u8; 4];
-            self.dev_fd.read_exact(&mut buf)?;
-            unsafe {
-                // check that there are no errors
-                self.check_errors(ptr::read_volatile(self.base.offset(S2MM_DMASR)))?;
-                // clear irqs in dma
-                ptr::write_volatile(self.base.offset(S2MM_DMASR), 0x7000);
-            }
+    fn wait_sg_complete_h2d_fini(&mut self) -> Result<()> {
+        unsafe {
+            // check that there are no errors
+            self.check_errors(ptr::read_volatile(self.base.offset(MM2S_DMASR)))?;
+            // clear irqs in dma
+            ptr::write_volatile(self.base.offset(MM2S_DMASR), 0x7000);
         }
         Ok(())
     }
 
-    pub fn reset(&mut self) {
+    #[cfg(feature = "scatter-gather")]
+    fn wait_sg_complete_d2h_fini(&mut self) -> Result<()> {
+        unsafe {
+            // check that there are no errors
+            self.check_errors(ptr::read_volatile(self.base.offset(S2MM_DMASR)))?;
+            // clear irqs in dma
+            ptr::write_volatile(self.base.offset(S2MM_DMASR), 0x7000);
+        }
+        Ok(())
+    }
+
+    fn reset(&mut self) {
         unsafe {
             // reset controller
             ptr::write_volatile(self.base.offset(MM2S_DMACR), 0x0004);
@@ -348,7 +426,7 @@ impl AxiDma {
         }
     }
 
-    pub fn status_h2d(&self) {
+    fn status_h2d(&self) {
         let mut c;
         unsafe {
             c = ptr::read_volatile(self.base.offset(MM2S_DMACR));
@@ -421,7 +499,7 @@ impl AxiDma {
         println!();
     }
 
-    pub fn status_d2h(&self) {
+    fn status_d2h(&self) {
         let mut c;
         unsafe {
             c = ptr::read_volatile(self.base.offset(S2MM_DMACR));
@@ -494,19 +572,7 @@ impl AxiDma {
         println!();
     }
 
-    pub fn wait_d2h(&mut self) -> Result<()> {
-        let mut buf = [0u8; 4];
-        self.dev_fd.read_exact(&mut buf)?;
-        Ok(())
-    }
-
-    pub fn wait_h2d(&mut self) -> Result<()> {
-        let mut buf = [0u8; 4];
-        self.dev_fd.read_exact(&mut buf)?;
-        Ok(())
-    }
-
-    pub fn size_d2h(&self) -> usize {
+    fn size_d2h(&self) -> usize {
         unsafe { ptr::read_volatile(self.base.offset(S2MM_LENGTH)) as usize }
     }
 
@@ -540,7 +606,7 @@ impl AxiDma {
     }
 }
 
-impl Drop for AxiDma {
+impl Drop for AxiDmaBase {
     fn drop(&mut self) {
         unsafe {
             libc::munmap(self.base as *mut libc::c_void, self.size);
@@ -548,4 +614,4 @@ impl Drop for AxiDma {
     }
 }
 
-unsafe impl Send for AxiDma {}
+unsafe impl Send for AxiDmaBase {}
