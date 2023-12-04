@@ -1,4 +1,3 @@
-use anyhow::Result;
 use std::fmt;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -9,6 +8,7 @@ use std::ptr;
 
 use crate::dmb;
 use crate::DmaBuffer;
+use crate::Error;
 #[cfg(feature = "scatter-gather")]
 use crate::SgDescriptor;
 
@@ -67,7 +67,7 @@ impl fmt::Debug for AxiDma {
 }
 
 impl AxiDma {
-    pub fn new(uio: &str) -> Result<AxiDma> {
+    pub fn new(uio: &str) -> Result<AxiDma, Error> {
         let dev_fd = OpenOptions::new()
             .read(true)
             .write(true)
@@ -76,37 +76,37 @@ impl AxiDma {
         Ok(AxiDma { dev_fd, dma })
     }
 
-    pub fn start_h2d(&mut self, buff: &DmaBuffer, bytes: usize) -> Result<()> {
+    pub fn start_h2d(&mut self, buff: &DmaBuffer, bytes: usize) -> Result<(), Error> {
         self.dma.start_h2d_ini(buff, bytes);
         self.enable_uio_irqs()?;
         self.dma.start_h2d_fini(buff, bytes);
         Ok(())
     }
 
-    pub fn start_d2h(&mut self, buff: &DmaBuffer, bytes: usize) -> Result<()> {
+    pub fn start_d2h(&mut self, buff: &DmaBuffer, bytes: usize) -> Result<(), Error> {
         self.dma.start_d2h_ini(buff, bytes);
         self.enable_uio_irqs()?;
         self.dma.start_d2h_fini(buff, bytes);
         Ok(())
     }
 
-    fn enable_uio_irqs(&mut self) -> Result<()> {
+    fn enable_uio_irqs(&mut self) -> Result<(), Error> {
         self.dev_fd.write_all(&[1u8, 0, 0, 0])?;
         Ok(())
     }
 
     #[cfg(feature = "scatter-gather")]
-    pub fn enqueue_sg_h2d(&mut self, descriptor: &mut SgDescriptor) -> Result<()> {
+    pub fn enqueue_sg_h2d(&mut self, descriptor: &mut SgDescriptor) -> Result<(), Error> {
         self.dma.enqueue_sg_h2d(descriptor)
     }
 
     #[cfg(feature = "scatter-gather")]
-    pub fn enqueue_sg_d2h(&mut self, descriptor: &mut SgDescriptor) -> Result<()> {
+    pub fn enqueue_sg_d2h(&mut self, descriptor: &mut SgDescriptor) -> Result<(), Error> {
         self.dma.enqueue_sg_d2h(descriptor)
     }
 
     #[cfg(feature = "scatter-gather")]
-    pub fn wait_sg_complete_h2d(&mut self, descriptor: &SgDescriptor) -> Result<()> {
+    pub fn wait_sg_complete_h2d(&mut self, descriptor: &SgDescriptor) -> Result<(), Error> {
         loop {
             if descriptor.completed() {
                 dmb(); // the complete flag acts as an acquire lock
@@ -124,7 +124,7 @@ impl AxiDma {
     }
 
     #[cfg(feature = "scatter-gather")]
-    pub fn wait_sg_complete_d2h(&mut self, descriptor: &SgDescriptor) -> Result<()> {
+    pub fn wait_sg_complete_d2h(&mut self, descriptor: &SgDescriptor) -> Result<(), Error> {
         loop {
             if descriptor.completed() {
                 dmb(); // the complete flag acts as an acquire lock
@@ -153,13 +153,13 @@ impl AxiDma {
         self.dma.status_d2h();
     }
 
-    pub fn wait_d2h(&mut self) -> Result<()> {
+    pub fn wait_d2h(&mut self) -> Result<(), Error> {
         let mut buf = [0u8; 4];
         self.dev_fd.read_exact(&mut buf)?;
         Ok(())
     }
 
-    pub fn wait_h2d(&mut self) -> Result<()> {
+    pub fn wait_h2d(&mut self) -> Result<(), Error> {
         let mut buf = [0u8; 4];
         self.dev_fd.read_exact(&mut buf)?;
         Ok(())
@@ -171,7 +171,7 @@ impl AxiDma {
 }
 
 impl AxiDmaBase {
-    fn new(uio: &str, dev_fd: RawFd) -> Result<AxiDmaBase> {
+    fn new(uio: &str, dev_fd: RawFd) -> Result<AxiDmaBase, Error> {
         let mut size_f = File::open(format!("/sys/class/uio/{}/maps/map0/size", uio))?;
         let mut buf = String::new();
         size_f.read_to_string(&mut buf)?;
@@ -189,7 +189,7 @@ impl AxiDmaBase {
                 0,
             );
             if dev == libc::MAP_FAILED {
-                anyhow::bail!("mapping dma buffer into virtual memory failed");
+                return Err(Error::Mmap);
             }
         }
 
@@ -254,7 +254,7 @@ impl AxiDmaBase {
     }
 
     #[cfg(feature = "scatter-gather")]
-    pub fn enqueue_sg_h2d(&mut self, descriptor: &mut SgDescriptor) -> Result<()> {
+    pub fn enqueue_sg_h2d(&mut self, descriptor: &mut SgDescriptor) -> Result<(), Error> {
         unsafe {
             // Mark descriptor as not complete so that calls to
             // wait_sg_complete_h2d must wait for the DMA to mark it as
@@ -267,7 +267,7 @@ impl AxiDmaBase {
             let status = ptr::read_volatile(self.base.offset(MM2S_DMASR));
             let sg_incl = status & (1 << 3) != 0;
             if !sg_incl {
-                anyhow::bail!("Scatter Gather is disabled");
+                return Err(Error::SgDisabled);
             }
             self.check_errors(status)?;
             let stopped = status & 1 != 0;
@@ -318,7 +318,7 @@ impl AxiDmaBase {
     }
 
     #[cfg(feature = "scatter-gather")]
-    pub fn enqueue_sg_d2h(&mut self, descriptor: &mut SgDescriptor) -> Result<()> {
+    pub fn enqueue_sg_d2h(&mut self, descriptor: &mut SgDescriptor) -> Result<(), Error> {
         unsafe {
             // Mark descriptor as not complete so that calls to
             // wait_sg_complete_d2h must wait for the DMA to mark it as
@@ -331,7 +331,7 @@ impl AxiDmaBase {
             let status = ptr::read_volatile(self.base.offset(S2MM_DMASR));
             let sg_incl = status & (1 << 3) != 0;
             if !sg_incl {
-                anyhow::bail!("Scatter Gather is disabled");
+                return Err(Error::SgDisabled);
             }
             self.check_errors(status)?;
             let stopped = status & 1 != 0;
@@ -382,7 +382,7 @@ impl AxiDmaBase {
     }
 
     #[cfg(feature = "scatter-gather")]
-    fn wait_sg_complete_h2d_fini(&mut self) -> Result<()> {
+    fn wait_sg_complete_h2d_fini(&mut self) -> Result<(), Error> {
         unsafe {
             // check that there are no errors
             self.check_errors(ptr::read_volatile(self.base.offset(MM2S_DMASR)))?;
@@ -393,7 +393,7 @@ impl AxiDmaBase {
     }
 
     #[cfg(feature = "scatter-gather")]
-    fn wait_sg_complete_d2h_fini(&mut self) -> Result<()> {
+    fn wait_sg_complete_d2h_fini(&mut self) -> Result<(), Error> {
         unsafe {
             // check that there are no errors
             self.check_errors(ptr::read_volatile(self.base.offset(S2MM_DMASR)))?;
@@ -577,7 +577,7 @@ impl AxiDmaBase {
     }
 
     #[cfg(feature = "scatter-gather")]
-    fn check_errors(&self, status: u32) -> Result<()> {
+    fn check_errors(&self, status: u32) -> Result<(), Error> {
         let dma_int_err = status & (1 << 4) != 0;
         let dma_slv_err = status & (1 << 5) != 0;
         let dma_dec_err = status & (1 << 6) != 0;
@@ -585,22 +585,22 @@ impl AxiDmaBase {
         let sg_slv_err = status & (1 << 9) != 0;
         let sg_dec_err = status & (1 << 10) != 0;
         if dma_int_err {
-            anyhow::bail!("DMA internal error: DMASR 0x{:08x}", status);
+            return Err(Error::DmaInternal(status));
         }
         if dma_slv_err {
-            anyhow::bail!("DMA slave error: DMASR 0x{:08x}", status);
+            return Err(Error::DmaSlave(status));
         }
         if dma_dec_err {
-            anyhow::bail!("DMA decode error: DMASR 0x{:08x}", status);
+            return Err(Error::DmaDecode(status));
         }
         if sg_int_err {
-            anyhow::bail!("SG internal error: DMASR 0x{:08x}", status);
+            return Err(Error::SgInternal(status));
         }
         if sg_slv_err {
-            anyhow::bail!("SG slave error: DMASR 0x{:08x}", status);
+            return Err(Error::SgSlave(status));
         }
         if sg_dec_err {
-            anyhow::bail!("SG decode error: DMASR 0x{:08x}", status);
+            return Err(Error::SgDecode(status));
         }
         Ok(())
     }

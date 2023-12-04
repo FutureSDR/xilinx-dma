@@ -25,9 +25,9 @@ async = ["dep:async-io"]
 scatter-gather = []
 
 [dependencies]
-libc = "0.2"
-anyhow = "1.0"
 async-io = { version = "2.2", optional = true }
+libc = "0.2"
+thiserror = "1.0"
 
 [dev-dependencies]
 fastrand = "2.0"

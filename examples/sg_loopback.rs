@@ -77,14 +77,14 @@
 //! manual cache invalidation, since reading an uncached buffer sequentially to
 //! check its contents is very slow.
 
-use anyhow::Result;
 use std::convert::TryFrom;
 use xilinx_dma::AxiDma;
 use xilinx_dma::DmaBuffer;
+use xilinx_dma::Error;
 use xilinx_dma::SgDescriptor;
 use xilinx_dma::SG_DESCRIPTOR_LEN;
 
-fn main() -> Result<()> {
+fn main() -> Result<(), Error> {
     let descriptor_buffer = DmaBuffer::new("udmabuf_descriptors")?;
     let mut h2d0 = DmaBuffer::new("udmabuf_h2d0")?;
     let mut h2d1 = DmaBuffer::new("udmabuf_h2d1")?;
@@ -166,7 +166,7 @@ fn main() -> Result<()> {
             d2h_dma.enqueue_sg_d2h(current.0)?;
             std::mem::swap(&mut current, &mut other);
         }
-        Ok::<(), anyhow::Error>(())
+        Ok::<(), Error>(())
     });
 
     let mut generator = DataGenerator::new();

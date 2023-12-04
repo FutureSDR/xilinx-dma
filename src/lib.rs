@@ -23,3 +23,28 @@ pub use dmb::dmb;
 pub fn dmb() {
     // DMB is ARM-only, so we use a nop in other archs
 }
+
+/// Xilinx DMA Error
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error("Mmapping DMA buffer into virtual memory failed.")]
+    Mmap,
+    #[error("Scatter Gather is disabled in HW.")]
+    SgDisabled,
+    #[error("DMA internal error (DMASR 0x{0:08x})")]
+    DmaInternal(u32),
+    #[error("DMA slave error (DMASR 0x{0:08x})")]
+    DmaSlave(u32),
+    #[error("DMA decode error (DMASR 0x{0:08x})")]
+    DmaDecode(u32),
+    #[error("Scatter Gather internal error (DMASR 0x{0:08x})")]
+    SgInternal(u32),
+    #[error("Scatter Gather slave error (DMASR 0x{0:08x})")]
+    SgSlave(u32),
+    #[error("Scatter Gather decode error (DMASR 0x{0:08x})")]
+    SgDecode(u32),
+    #[error("I/O Error")]
+    Io(#[from] std::io::Error),
+    #[error("Failed to parse integer from sysfs files.")]
+    Parse(#[from] std::num::ParseIntError),
+}

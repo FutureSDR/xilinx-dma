@@ -1,8 +1,8 @@
-use anyhow::Result;
 use xilinx_dma::AxiDma;
 use xilinx_dma::DmaBuffer;
+use xilinx_dma::Error;
 
-fn main() -> Result<()> {
+fn main() -> Result<(), Error> {
     let dma_buffer = DmaBuffer::new("udmabuf0")?;
     println!("{:?}", dma_buffer);
 

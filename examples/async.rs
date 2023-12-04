@@ -1,8 +1,8 @@
-use anyhow::Result;
 use xilinx_dma::AxiDmaAsync;
 use xilinx_dma::DmaBuffer;
+use xilinx_dma::Error;
 
-fn main() -> Result<()> {
+fn main() -> Result<(), Error> {
     let dma_buffer_h2d = DmaBuffer::new("udmabuf0")?;
     let dma_buffer_d2h = DmaBuffer::new("udmabuf1")?;
     println!("{:?}", dma_buffer_h2d);
@@ -38,7 +38,7 @@ fn main() -> Result<()> {
         println!("h2d done");
         dma_d2h.wait_d2h().await?;
         println!("d2h done");
-        Result::<()>::Ok(())
+        Result::<(), Error>::Ok(())
     })?;
 
     for i in 0..items {

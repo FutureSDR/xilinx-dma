@@ -1,4 +1,3 @@
-use anyhow::Result;
 use async_io::Async;
 use std::fmt;
 use std::fs::File;
@@ -10,6 +9,7 @@ use super::AxiDmaBase;
 #[cfg(feature = "scatter-gather")]
 use crate::dmb;
 use crate::DmaBuffer;
+use crate::Error;
 #[cfg(feature = "scatter-gather")]
 use crate::SgDescriptor;
 
@@ -28,7 +28,7 @@ impl fmt::Debug for AxiDmaAsync {
 }
 
 impl AxiDmaAsync {
-    pub fn new(uio: &str) -> Result<AxiDmaAsync> {
+    pub fn new(uio: &str) -> Result<AxiDmaAsync, Error> {
         let dev_fd = OpenOptions::new()
             .read(true)
             .write(true)
@@ -40,21 +40,21 @@ impl AxiDmaAsync {
         })
     }
 
-    pub async fn start_h2d(&mut self, buff: &DmaBuffer, bytes: usize) -> Result<()> {
+    pub async fn start_h2d(&mut self, buff: &DmaBuffer, bytes: usize) -> Result<(), Error> {
         self.dma.start_h2d_ini(buff, bytes);
         self.enable_uio_irqs().await?;
         self.dma.start_h2d_fini(buff, bytes);
         Ok(())
     }
 
-    pub async fn start_d2h(&mut self, buff: &DmaBuffer, bytes: usize) -> Result<()> {
+    pub async fn start_d2h(&mut self, buff: &DmaBuffer, bytes: usize) -> Result<(), Error> {
         self.dma.start_d2h_ini(buff, bytes);
         self.enable_uio_irqs().await?;
         self.dma.start_d2h_fini(buff, bytes);
         Ok(())
     }
 
-    async fn enable_uio_irqs(&mut self) -> Result<()> {
+    async fn enable_uio_irqs(&mut self) -> Result<(), Error> {
         unsafe {
             self.dev_fd
                 .write_with_mut(|s| s.write(&[1u8, 0, 0, 0]))
@@ -64,17 +64,17 @@ impl AxiDmaAsync {
     }
 
     #[cfg(feature = "scatter-gather")]
-    pub fn enqueue_sg_h2d(&mut self, descriptor: &mut SgDescriptor) -> Result<()> {
+    pub fn enqueue_sg_h2d(&mut self, descriptor: &mut SgDescriptor) -> Result<(), Error> {
         self.dma.enqueue_sg_h2d(descriptor)
     }
 
     #[cfg(feature = "scatter-gather")]
-    pub fn enqueue_sg_d2h(&mut self, descriptor: &mut SgDescriptor) -> Result<()> {
+    pub fn enqueue_sg_d2h(&mut self, descriptor: &mut SgDescriptor) -> Result<(), Error> {
         self.dma.enqueue_sg_d2h(descriptor)
     }
 
     #[cfg(feature = "scatter-gather")]
-    pub async fn wait_sg_complete_h2d(&mut self, descriptor: &SgDescriptor) -> Result<()> {
+    pub async fn wait_sg_complete_h2d(&mut self, descriptor: &SgDescriptor) -> Result<(), Error> {
         loop {
             if descriptor.completed() {
                 dmb(); // the complete flag acts as an acquire lock
@@ -92,7 +92,7 @@ impl AxiDmaAsync {
     }
 
     #[cfg(feature = "scatter-gather")]
-    pub async fn wait_sg_complete_d2h(&mut self, descriptor: &SgDescriptor) -> Result<()> {
+    pub async fn wait_sg_complete_d2h(&mut self, descriptor: &SgDescriptor) -> Result<(), Error> {
         loop {
             if descriptor.completed() {
                 dmb(); // the complete flag acts as an acquire lock
@@ -121,13 +121,13 @@ impl AxiDmaAsync {
         self.dma.status_d2h();
     }
 
-    pub async fn wait_d2h(&mut self) -> Result<()> {
+    pub async fn wait_d2h(&mut self) -> Result<(), Error> {
         let mut buf = [0u8; 4];
         unsafe { self.dev_fd.read_with_mut(|s| s.read(&mut buf)).await? };
         Ok(())
     }
 
-    pub async fn wait_h2d(&mut self) -> Result<()> {
+    pub async fn wait_h2d(&mut self) -> Result<(), Error> {
         let mut buf = [0u8; 4];
         unsafe { self.dev_fd.read_with_mut(|s| s.read(&mut buf)).await? };
         Ok(())

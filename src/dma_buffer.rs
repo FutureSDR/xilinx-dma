@@ -1,4 +1,3 @@
-use anyhow::Result;
 use std::fmt;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -6,6 +5,8 @@ use std::io::prelude::*;
 use std::mem;
 use std::os::unix::io::AsRawFd;
 use std::slice;
+
+use crate::Error;
 
 pub struct DmaBuffer {
     name: String,
@@ -30,7 +31,7 @@ impl fmt::Debug for DmaBuffer {
 }
 
 impl DmaBuffer {
-    pub fn new(name: &str) -> Result<DmaBuffer> {
+    pub fn new(name: &str) -> Result<DmaBuffer, Error> {
         let phy_f = format!("/sys/class/u-dma-buf/{}/phys_addr", name);
         let mut phy_f = File::open(phy_f)?;
         let mut buff = String::new();
@@ -79,7 +80,7 @@ impl DmaBuffer {
                 0,
             );
             if buffer == libc::MAP_FAILED {
-                anyhow::bail!("mapping dma buffer into virtual memory failed");
+                return Err(Error::Mmap);
             }
         }
 
@@ -124,12 +125,12 @@ impl DmaBuffer {
         self.debug_vma
     }
 
-    pub fn sync_for_cpu(&mut self) -> Result<()> {
+    pub fn sync_for_cpu(&mut self) -> Result<(), Error> {
         self.sync_for_cpu.write_all(b"1")?;
         Ok(())
     }
 
-    pub fn sync_for_device(&mut self) -> Result<()> {
+    pub fn sync_for_device(&mut self) -> Result<(), Error> {
         self.sync_for_device.write_all(b"1")?;
         Ok(())
     }
