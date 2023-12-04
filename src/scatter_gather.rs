@@ -1,7 +1,7 @@
 use std::ptr;
 
-const NXTDESC: isize = 0x0 / 4;
-const NXTDESC_MSB: isize = 0x4 / 4;
+const NXTDESC: isize = 0; // 0x0 / 4
+const NXTDESC_MSB: isize = 1; // 0x4 / 4
 const BUFFER_ADDRESS: isize = 0x8 / 4;
 const BUFFER_ADDRESS_MSB: isize = 0xC / 4;
 const CONTROL: isize = 0x18 / 4;
@@ -22,6 +22,8 @@ unsafe impl Sync for SgDescriptor {}
 pub const SG_DESCRIPTOR_LEN: usize = 16 * 4;
 
 impl SgDescriptor {
+    /// # Safety
+    /// Addresses point to mmaped DMA buffer that fits a SgDescriptor.
     pub unsafe fn from_base_ptr(base: *mut u32, phys_addr: usize) -> SgDescriptor {
         SgDescriptor {
             base,
